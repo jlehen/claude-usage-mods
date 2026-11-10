@@ -6,6 +6,8 @@ import { HUE, roboSvg } from './robo'
 
 const usageAtom = atom({ plugin: 'usage-band', key: 'usage' } as const, null)
 const modelAtom = atom({ plugin: 'usage-band', key: 'model' } as const, null)
+// the effort the main thread's last request asked for: no call reads it before the first request
+const effortAtom = atom({ plugin: 'usage-band', key: 'effort' } as const, null)
 const nowAtom = atom({ plugin: 'usage-band', key: 'now' } as const, 0)
 const hiddenAtom = atom({ plugin: 'usage-band', key: 'isHidden' } as const, false)
 // input tokens this session, and how many of them the prompt cache served
@@ -31,13 +33,13 @@ const ICON = 16
 const ICON_GREY = '#8B8B95'
 // Robo stands a little taller than the icons, as ribbon's does beside its chip
 const ROBO = 18
-// Cells a full one-line band takes (model, context, 5h, 7d, cache, cost and separators). In the
-// terminal a cell is a character: about 97. The desktop counts cells of about 12 px in its own
-// proportional font: a full band fit on one line at 85, seen live, its text about 78 (84 leaves
-// room for longer values). Narrower, each group keeps its number alone: context % without its bar
-// and tokens, the limits without their reset, the cache as Robo and its hit % (the word where
-// there is no Robo)
-const WIDE_BAND = { terminal: 100, other: 84 }
+// Cells a full one-line band takes (model, effort, context, 5h, 7d, cache, cost and separators). In
+// the terminal a cell is a character: about 103. The desktop counts cells of about 12 px in its own
+// proportional font: a full band without the effort fit on one line at 85, seen live, its text
+// about 78 (84 left room for longer values; the effort adds up to 6, ' xhigh'). Narrower, each
+// group keeps its number alone: context % without its bar and tokens, the limits without their
+// reset, the cache as Robo and its hit % (the word where there is no Robo)
+const WIDE_BAND = { terminal: 106, other: 90 }
 const wideFrom = (surface: string) => (surface === 'terminal' ? WIDE_BAND.terminal : WIDE_BAND.other)
 const wideNote = `wide from ${WIDE_BAND.other} cells, ${WIDE_BAND.terminal} in the terminal`
 // The cells each surface last drew the band in and the layout it picked, for /band-usage width
@@ -278,6 +280,9 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       const model = result.usage?.model ?? e.model
       if ((await read($, modelAtom)) !== model) await update($, modelAtom, () => model)
+      // absent on a model that takes no effort
+      const effort = e.effort === undefined ? null : String(e.effort)
+      if ((await read($, effortAtom)) !== effort) await update($, effortAtom, () => effort)
     }
     await refresh($)
     return result
@@ -288,6 +293,7 @@ export const register: Register = on => {
     const usage = await read($, usageAtom)
     if (!usage) return next(e)
     const model = await read($, modelAtom)
+    const effort = await read($, effortAtom)
     const now = await read($, nowAtom)
     const elements = $.ui.resolve(e)
     const { Box, Text, Button } = elements
@@ -315,7 +321,16 @@ export const register: Register = on => {
     const group = (value: RenderElement) => <Text wrap="truncate">{value}</Text>
     // In order: model, context, 5h and 7d limits, cache hit, cost
     const groups: RenderElement[] = []
-    if (model) groups.push(group(<Text color="claude">{shortModel(model)}</Text>))
+    if (model) {
+      groups.push(
+        group(
+          <Text>
+            <Text color="claude">{shortModel(model)}</Text>
+            {effort && <Text dimColor> {effort}</Text>}
+          </Text>,
+        ),
+      )
+    }
     groups.push(
       group(
         narrow ? (

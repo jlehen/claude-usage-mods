@@ -232,6 +232,41 @@ test('a shown button stays shown in a new session', async ($, on) => {
   await ui.unmount()
 })
 
+// One model request: the main thread's, or a subagent's when agentId is given
+async function step($, model: string, effort?: string, agentId?: string) {
+  const stream = $.turn.step({ turnId: 't', index: 0, model, effort, agentId } as never)
+  for await (const _ of stream);
+  return stream.result
+}
+
+test('the effort shows after the model, from the main thread\'s requests alone', async ($, on) => {
+  mock.clock(on)
+  beneath(on)
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn', usage: null } as never
+  })
+  await measure($)
+  const texts = async () => {
+    const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    await ui.unmount()
+    return all
+  }
+  await step($, 'claude-opus-5-5', 'high')
+  expect(await texts()).toContain('opus 5.5 high')
+  // a subagent's effort is its own: the band keeps the main thread's
+  await step($, 'claude-haiku-5-5', 'low', 'agent-1')
+  expect(await texts()).toContain('opus 5.5 high')
+  // /effort max shows from the next request
+  await step($, 'claude-opus-5-5', 'max')
+  expect(await texts()).toContain('opus 5.5 max')
+  // a model that takes no effort shows its name alone
+  await step($, 'claude-haiku-5-5')
+  const last = await texts()
+  expect(last).toContain('haiku 5.5')
+  expect(last.some(t => /haiku 5\.5 /.test(t))).toBe(false)
+})
+
 test('cache hit: the share of input the cache served, green when high', () => {
   expect(cacheHit(0, 0)).toBeUndefined()
   expect(cacheHit(63, 100)).toBe(63)
@@ -268,7 +303,7 @@ test('/band-usage width says the cells each surface drew the band in and the lay
   const out = (await $.command.run({ command: 'band-usage', args: 'width' })).text
   expect(out).toContain('desktop: 59 cells (bodyColumns), narrow layout')
   expect(out).toContain('terminal: 120 cells (bodyColumns), wide layout')
-  expect(out).toContain('Layout: auto (wide from 84 cells, 100 in the terminal).')
+  expect(out).toContain('Layout: auto (wide from 90 cells, 106 in the terminal).')
 })
 
 test('/band-usage width wide | narrow | auto holds a layout whatever the width, kept across sessions', async ($, on) => {
@@ -288,14 +323,14 @@ test('/band-usage width wide | narrow | auto holds a layout whatever the width, 
   expect((await $.command.run({ command: 'band-usage', args: 'width' })).text).toContain('Layout: narrow')
   await $.command.run({ command: 'band-usage', args: 'width auto' })
   expect([await words(59), await words(140)]).toEqual([false, true])
-  // the desktop counts wider cells: a full band fits from 84 there, while the terminal needs 100
+  // the desktop counts wider cells: a full band fits from 90 there, while the terminal needs 106
   const desk = async (bodyColumns: number) => {
     const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns } })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     await ui.unmount()
     return texts.some(t => t.includes('1.0k/200.0k'))
   }
-  expect([await desk(83), await desk(85), await words(85)]).toEqual([false, true, false])
+  expect([await desk(89), await desk(91), await words(91)]).toEqual([false, true, false])
   expect((await $.command.run({ command: 'band-usage', args: 'width huge' })).text).toMatch(/width auto \| wide \| narrow/)
 })
 

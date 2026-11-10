@@ -20,13 +20,13 @@ Commands follow one scheme: `/hud-<name>` opens a pane, `/band-<name>` shows or 
 
 **usage-band** is the bottom row: one line that answers "how much room and budget do I have left?" without running `/usage` or `/context`. From left to right:
 
-- **Model** - the model the main loop is running, in Claude orange.
+- **Model** - the model the main loop is running, in Claude orange, then its effort level (`low` to `max`) in dim grey. The effort shows from the first prompt on, and an `/effort` change shows from the next one: Claude Code says the level only when it sends a request. A model that takes no effort shows its name alone.
 - **Context** - a bar, then how full the context window is in percent, then tokens used / window size.
 - **5h / 7d** - percent used of each rate limit, then a countdown to its reset (`↻ 1h24m`). The `5h` and `7d` labels are blue.
 - **Cache** - Robo, then `warm 54m` (minutes before the prompt cache goes cold) or `cold 2h5m` (how long it has been idle), then the hit rate: the share of this session's input tokens the cache served, every response counted, subagents included. Robo bobs while the cache is warm and sits frozen in ice once it is cold; pressing it opens the `/hud-cache` card. The clock restarts at each main-thread request (subagents keep their own cache), picks up a resumed session's idle time, and starts over on `/clear` and `/compact`. It assumes the 1 hour cache: a session on the 5 minute cache goes cold sooner than it shows.
 - **Cost** - what this session has cost at API prices, after a 💰, in dim grey: an estimate, so it reads quietly.
 
-**Narrow band.** Under 84 cells on desktop, or 100 in the terminal (the room a full line takes: the desktop counts wider cells, in a proportional font), each section keeps its number alone: the model, context %, `5h` and `7d` %, Robo with the hit %, and the cost without its 💰. The context bar, token counts, reset countdowns and the cache's word and time drop out. The terminal draws no Robo, so there the cache keeps its `warm` or `cold`.
+**Narrow band.** Under 90 cells on desktop, or 106 in the terminal (the room a full line takes: the desktop counts wider cells, in a proportional font), each section keeps its number alone: the model, context %, `5h` and `7d` %, Robo with the hit %, and the cost without its 💰. The context bar, token counts, reset countdowns and the cache's word and time drop out. The terminal draws no Robo, so there the cache keeps its `warm` or `cold`.
 
 The sections are spread evenly with a `│` midway between each pair. Context and limit percentages turn yellow at 50% and red at 80%; the cache hit rate goes the other way: green from 80%, yellow from 50%, red below. The band refreshes while you are idle, so the countdowns stay accurate, and it steps aside when a survey or question takes that spot.
 
